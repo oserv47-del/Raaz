@@ -1,9 +1,9 @@
 [
   {
     "name":"Surah Ikhlas",
-    "type":"Fantasy",
+    "type":"islamic",
     "orientation":"landscape",
-    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Isaac/game.swf",
+    "url":"https://github.com/oserv47-del/Raaz/raw/refs/heads/main/videoplayback.swf",
     "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Isaac/controlsConfig.json",
     "img-url":"https://github.com/oserv47-del/Raaz/raw/refs/heads/main/394605203073167.6690af9b24b8c.webp"
   },
