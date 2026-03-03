@@ -1,0 +1,114 @@
+[
+  {
+    "name":"Isaac",
+    "type":"Fantasy",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Isaac/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Isaac/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Isaac/game.jpg"
+  },
+  {
+    "name":"Isaac Eternal",
+    "type":"Fantasy",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/IsaacEternal/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/IsaacEternal/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/IsaacEternal/game.jpg"
+  },
+  {
+    "name":"Meat Boy",
+    "type":"Platformer",
+    "orientation":"portrait",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/MeatBoy/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/MeatBoy/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/MeatBoy/game.webp"
+  },
+  {
+    "name":"Ace Gangster",
+    "type":"Open World",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AceGangster/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AceGangster/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AceGangster/game.jpg"
+  },
+  {
+    "name":"Angry Weirds",
+    "type":"Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AngryWeirds/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AngryWeirds/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/AngryWeirds/game.webp"
+  },
+  {
+    "name":"Bad Ice Cream",
+    "type":"2D Action",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BadIceCream/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BadIceCream/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BadIceCream/game.webp"
+  },
+  {
+    "name":"Bubble Trouble",
+    "type":"Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BubbleTrouble/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BubbleTrouble/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/BubbleTrouble/game.png"
+  },
+  {
+    "name":"Fancy Pants Adventure 1",
+    "type":"Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA1/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA1/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA1/game.png"
+  },
+  {
+    "name":"Fancy Pants Adventure 3",
+    "type":"Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA3/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA3/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/FPA3/game.png"
+  },
+  {
+    "name":"Gun Blood",
+    "type":"Action",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/GunBlood/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/GunBlood/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/GunBlood/game.png"
+  },
+  {
+    "name":"Jack Smith",
+    "type":"Action",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/JackSmith/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/JackSmith/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/JackSmith/game.png"
+  },
+  {
+    "name":"Murder!",
+    "type":"Action",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Murder/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Murder/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/Murder/game.png"
+  },
+  {
+    "name":"Super D",
+    "type":"3D Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperD/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperD/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperD/game.jpg"
+  },
+  {
+    "name":"Super Mario 63",
+    "type":"2D Platformer",
+    "orientation":"landscape",
+    "url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperMario63/game.swf",
+    "config":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperMario63/controlsConfig.json",
+    "img-url":"https://raw.githubusercontent.com/SYTStudio/RuffleEmu/main/SuperMario63/game.png"
+  }
+]
