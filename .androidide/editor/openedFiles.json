@@ -1,0 +1,95 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 98,
+          "index": 12187,
+          "line": 278
+        },
+        "start": {
+          "column": 98,
+          "index": 12187,
+          "line": 278
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/ui/theme/Color.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 396,
+          "line": 13
+        },
+        "start": {
+          "column": 0,
+          "index": 396,
+          "line": 13
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/ui/theme/Type.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 487,
+          "line": 17
+        },
+        "start": {
+          "column": 0,
+          "index": 487,
+          "line": 17
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/ui/theme/Theme.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 1319,
+          "line": 45
+        },
+        "start": {
+          "column": 0,
+          "index": 1319,
+          "line": 45
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/res/drawable/ic_launcher_background.xml",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/AndroidManifest.xml",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 1700,
+          "line": 47
+        },
+        "start": {
+          "column": 0,
+          "index": 1700,
+          "line": 47
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/MainActivity.kt"
+}

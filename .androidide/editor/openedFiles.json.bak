@@ -1,0 +1,20 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1286,
+          "line": 41
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDEProjects/GFX TOOL /app/src/main/java/com/example/gfxtool/MainActivity.kt"
+}
