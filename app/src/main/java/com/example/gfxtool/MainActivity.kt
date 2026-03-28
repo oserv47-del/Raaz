@@ -4,7 +4,9 @@ package com.example.gfxtool
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
@@ -42,9 +44,11 @@ import com.example.gfxtool.ui.theme.*
 import kotlinx.coroutines.*
 import rikka.shizuku.Shizuku
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipInputStream
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 //  Preferences Manager
@@ -59,14 +63,16 @@ class PrefsManager(context: Context) {
 //  Data Model
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 data class FeatureItem(
-    val emoji       : String,
-    val title       : String,
-    val subtitle    : String,
-    val color       : Color,
-    val key         : String,
-    val downloadUrl : String,
-    val fileName    : String,
-    val targetFolder: String // e.g., "Paks" or "Config/Android" or "SaveGames"
+    val emoji               : String,
+    val title               : String,
+    val subtitle            : String,
+    val color               : Color,
+    val key                 : String,
+    val downloadUrl         : String,
+    val fileName            : String,
+    val targetPath          : String, 
+    val isZip               : Boolean = false, 
+    val targetFolderName    : String = "" // Defines what folder to delete when turned OFF
 )
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -78,8 +84,10 @@ class MainActivity : ComponentActivity() {
     private var shizukuPermission by mutableStateOf(false)
     lateinit var prefs: PrefsManager
 
-    // BGMI Default Data Path (Target Folder)
-    private val bgmiBaseDir = "/storage/emulated/0/Android/data/com.pubg.imobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved"
+    // Target Directories Base Paths
+    private val bgmiFilesDir = "/storage/emulated/0/Android/data/com.pubg.imobile/files"
+    private val bgmiShadowTrackerDir = "$bgmiFilesDir/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra"
+    private val bgmiSavedDir = "$bgmiShadowTrackerDir/Saved"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,7 +116,28 @@ class MainActivity : ComponentActivity() {
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
-    //  Core Engine: Download & Apply (FIXED STORAGE PATH)
+    //  ZIP Extractor Utility
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    private fun unzipFile(zipFile: File, targetDirectory: File) {
+        ZipInputStream(FileInputStream(zipFile)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                val file = File(targetDirectory, entry.name)
+                if (entry.isDirectory) {
+                    file.mkdirs()
+                } else {
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { fos ->
+                        zis.copyTo(fos)
+                    }
+                }
+                entry = zis.nextEntry
+            }
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    //  Core Engine: SMART CACHE DOWNLOAD & INSTANT APPLY LOGIC
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
     private suspend fun downloadAndApplyFile(
         context: Context, 
@@ -118,41 +147,81 @@ class MainActivity : ComponentActivity() {
     ) {
         withContext(Dispatchers.IO) {
             try {
-                val targetDirPath = "$bgmiBaseDir/${item.targetFolder}"
+                val targetDirPath = item.targetPath
                 
-                // FIX: Use external cache dir so Shizuku (Shell UID) can read the downloaded file!
-                val cacheDir = context.getExternalFilesDir(null) 
-                if (cacheDir == null) {
-                    withContext(Dispatchers.Main) { onComplete(false, "Error: Storage not available!") }
-                    return@withContext
+                // Using externalMediaDirs so Shizuku can read it without Scoped Storage restrictions!
+                val mediaDirs = context.externalMediaDirs
+                val cacheDir = if (mediaDirs.isNotEmpty()) {
+                    File(mediaDirs[0], "GFX_Smart_Cache")
+                } else {
+                    File(context.getExternalFilesDir(null), "GFX_Smart_Cache")
                 }
+                
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+
                 val appLocalFile = File(cacheDir, item.fileName)
+                val extractDir = File(cacheDir, "${item.fileName}_extracted")
 
                 if (enable) {
-                    // 1. Download File from GitHub
-                    val url = URL(item.downloadUrl)
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.connectTimeout = 5000
-                    connection.connect()
+                    // STEP 1: SMART DOWNLOAD (Only if not already downloaded)
+                    if (!appLocalFile.exists()) {
+                        withContext(Dispatchers.Main) { 
+                            Toast.makeText(context, "Downloading data once, please wait...", Toast.LENGTH_SHORT).show() 
+                        }
+                        val url = URL(item.downloadUrl)
+                        val connection = url.openConnection() as HttpURLConnection
+                        connection.connectTimeout = 10000
+                        connection.connect()
 
-                    connection.inputStream.use { input ->
-                        FileOutputStream(appLocalFile).use { output ->
-                            input.copyTo(output)
+                        connection.inputStream.use { input ->
+                            FileOutputStream(appLocalFile).use { output ->
+                                input.copyTo(output)
+                            }
                         }
                     }
 
-                    // 2. Use Shizuku to copy (Make directory first, then copy & replace)
-                    val shizukuCmd = "mkdir -p '$targetDirPath' && cp -f '${appLocalFile.absolutePath}' '$targetDirPath/${item.fileName}'"
-                    val success = runShizukuCommand(shizukuCmd)
-                    
-                    if (success) {
-                        withContext(Dispatchers.Main) { onComplete(true, "${item.title} Applied Successfully!") }
+                    if (item.isZip) {
+                        // STEP 2: SMART EXTRACT (Only if not already extracted)
+                        if (!extractDir.exists() || extractDir.listFiles()?.isEmpty() == true) {
+                            withContext(Dispatchers.Main) { 
+                                Toast.makeText(context, "Extracting for the first time...", Toast.LENGTH_SHORT).show() 
+                            }
+                            extractDir.mkdirs()
+                            unzipFile(appLocalFile, extractDir)
+                        } else {
+                            // Instant apply indication for user
+                            withContext(Dispatchers.Main) { 
+                                Toast.makeText(context, "Applying instantly from cache...", Toast.LENGTH_SHORT).show() 
+                            }
+                        }
+                        
+                        // STEP 3: INSTANT COPY FROM CACHE
+                        val shizukuCmd = "mkdir -p '$targetDirPath' && cp -rf '${extractDir.absolutePath}/.' '$targetDirPath/'"
+                        val success = runShizukuCommand(shizukuCmd)
+                        
+                        // We DO NOT delete extractDir anymore. It stays in cache for instant future use!
+                        if (success) {
+                            withContext(Dispatchers.Main) { onComplete(true, "${item.title} Applied Successfully!") }
+                        } else {
+                            withContext(Dispatchers.Main) { onComplete(false, "Failed to apply ZIP Folder.") }
+                        }
                     } else {
-                        withContext(Dispatchers.Main) { onComplete(false, "Failed to copy file to Game Folder.") }
+                        // NORMAL FILE INSTANT APPLY
+                        withContext(Dispatchers.Main) { 
+                            if (appLocalFile.exists()) Toast.makeText(context, "Applying instantly...", Toast.LENGTH_SHORT).show() 
+                        }
+                        val shizukuCmd = "mkdir -p '$targetDirPath' && cp -f '${appLocalFile.absolutePath}' '$targetDirPath/${item.fileName}'"
+                        val success = runShizukuCommand(shizukuCmd)
+                        if (success) {
+                            withContext(Dispatchers.Main) { onComplete(true, "${item.title} Applied Successfully!") }
+                        } else {
+                            withContext(Dispatchers.Main) { onComplete(false, "Failed to copy file.") }
+                        }
                     }
                 } else {
-                    // 3. Remove File
-                    val shizukuCmd = "rm -f '$targetDirPath/${item.fileName}'"
+                    // STEP 4: REMOVE LOGIC
+                    val removeName = if (item.targetFolderName.isNotEmpty()) item.targetFolderName else item.fileName
+                    val shizukuCmd = "rm -rf '$targetDirPath/$removeName'"
                     runShizukuCommand(shizukuCmd)
                     withContext(Dispatchers.Main) { onComplete(true, "${item.title} Removed!") }
                 }
@@ -174,10 +243,9 @@ class MainActivity : ComponentActivity() {
             val process = method.invoke(null, arrayOf("sh", "-c", command), null, null) as java.lang.Process
             
             val exitCode = process.waitFor()
-            // If exit code is not 0, something went wrong (like permission denied or path not found)
             if (exitCode != 0) {
                 val errorStream = process.errorStream.bufferedReader().readText()
-                println("Shizuku Error: $errorStream") // Check Logcat if it fails
+                println("Shizuku Error: $errorStream") 
                 false
             } else {
                 true
@@ -258,7 +326,6 @@ class MainActivity : ComponentActivity() {
         val scope = rememberCoroutineScope()
         var loadingKey by remember { mutableStateOf("") }
 
-        // Handle Notification Permission for Android 13+
         val requestPermissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission()
         ) { isGranted: Boolean ->
@@ -273,18 +340,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Feature URLs & Target Paths mapping
-        val features = listOf(
-            FeatureItem("🚀", "Unlock 120 FPS", "Ultra Smooth Gameplay", Color(0xFF00FF41), "fps120", 
-                "https://github.com/rajamransri-blip/IslamicAppData/raw/refs/heads/main/Active.sav", "Active.sav", "SaveGames"),
-            FeatureItem("✨", "Anti-Aliasing Off", "Sharper Edges + Less GPU Load", Color(0xFF00CFFF), "antialias", 
-                "https://raw.githubusercontent.com/rajamransri-blip/GFX-Files/main/engine_no_aa.ini", "Engine.ini", "Config/Android"),
-            FeatureItem("🌟", "HDR Graphics", "Vivid Colors & High Contrast", Color(0xFFBB86FC), "hdr", 
-                "https://raw.githubusercontent.com/rajamransri-blip/GFX-Files/main/hdr_enjoy.ini", "EnjoyCJZC.ini", "Config/Android"),
-            FeatureItem("🌘", "Ultra Low Shadows", "More FPS — Shadows Disabled", Color(0xFFFF6D00), "shadow", 
-                "https://raw.githubusercontent.com/rajamransri-blip/GFX-Files/main/noshadows.pak", "NoShadows.pak", "Paks"),
-            FeatureItem("⚡", "Turbo Engine Mode", "Max CPU / GPU Performance", Color(0xFFFF4081), "turbo", 
-                "https://raw.githubusercontent.com/rajamransri-blip/GFX-Files/main/turbo_config.ini", "GameUserSettings.ini", "Config/Android")
+        val feature1 = FeatureItem(
+            emoji = "📁", title = "WALL HACK", subtitle = "STATUS - ACTIVE", 
+            color = Color(0xFFFFFF00), key = "ProgramBinaryCache.zip", 
+            downloadUrl = "https://github.com/raax00/RAAZ/releases/download/Binary/ProgramBinaryCache.zip", 
+            fileName = "ProgramBinaryCache.zip", targetPath = bgmiFilesDir, 
+            isZip = true, targetFolderName = "ProgramBinaryCache"
+        )
+        val feature2 = FeatureItem(
+            emoji = "🚀", title = "SMOOTH - NO LAG", subtitle = "Ultra Smooth Gameplay", 
+            color = Color(0xFF00FF41), key = "fps120", 
+            downloadUrl = "https://github.com/rajamransri-blip/IslamicAppData/raw/refs/heads/main/Active.sav", 
+            fileName = "Active.sav", targetPath = "$bgmiSavedDir/SaveGames", 
+            isZip = false, targetFolderName = "Active.sav"
         )
 
         Box(Modifier.fillMaxSize()) {
@@ -302,49 +370,210 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(10.dp))
 
-                features.forEachIndexed { idx, item ->
-                    var isEnabled by remember { mutableStateOf(prefs.getBool(item.key)) }
-
-                    SlideInCard(delayMs = idx * 80) {
-                        FeatureCard(
-                            item = item,
-                            isEnabled = isEnabled,
-                            isLoading = loadingKey == item.key,
-                            onToggle = { checked ->
-                                if (!shizukuPermission) {
-                                    Toast.makeText(context, "Grant Shizuku Permission First!", Toast.LENGTH_SHORT).show()
-                                    return@FeatureCard
-                                }
-                                
-                                if (prefs.getBool("haptic_feedback", true)) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                }
-
-                                loadingKey = item.key
-                                scope.launch {
-                                    downloadAndApplyFile(context, item, checked) { success, msg ->
-                                        loadingKey = ""
-                                        if (success) {
-                                            isEnabled = checked
-                                            prefs.setBool(item.key, checked)
-                                        }
-                                        if (prefs.getBool("notifications", true)) {
-                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
+                // Feature 1
+                var isEnabled1 by remember { mutableStateOf(prefs.getBool(feature1.key)) }
+                SlideInCard(delayMs = 80) {
+                    FeatureCard(item = feature1, isEnabled = isEnabled1, isLoading = loadingKey == feature1.key) { checked ->
+                        if (!shizukuPermission) { Toast.makeText(context, "Grant Shizuku Permission First!", Toast.LENGTH_SHORT).show(); return@FeatureCard }
+                        if (prefs.getBool("haptic_feedback", true)) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        loadingKey = feature1.key
+                        scope.launch {
+                            downloadAndApplyFile(context, feature1, checked) { success, msg ->
+                                loadingKey = ""; if (success) { isEnabled1 = checked; prefs.setBool(feature1.key, checked) }
+                                if (prefs.getBool("notifications", true)) Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             }
-                        )
+                        }
                     }
-                    Spacer(Modifier.height(10.dp))
                 }
+                Spacer(Modifier.height(10.dp))
+
+                // Feature 2
+                var isEnabled2 by remember { mutableStateOf(prefs.getBool(feature2.key)) }
+                SlideInCard(delayMs = 160) {
+                    FeatureCard(item = feature2, isEnabled = isEnabled2, isLoading = loadingKey == feature2.key) { checked ->
+                        if (!shizukuPermission) { Toast.makeText(context, "Grant Shizuku Permission First!", Toast.LENGTH_SHORT).show(); return@FeatureCard }
+                        if (prefs.getBool("haptic_feedback", true)) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        loadingKey = feature2.key
+                        scope.launch {
+                            downloadAndApplyFile(context, feature2, checked) { success, msg ->
+                                loadingKey = ""; if (success) { isEnabled2 = checked; prefs.setBool(feature2.key, checked) }
+                                if (prefs.getBool("notifications", true)) Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+
+                // Feature 3: AIM MOD (SMART EXPANDABLE CARD)
+                SlideInCard(delayMs = 240) {
+                    AntiAliasingCard(
+                        context = context, view = view, scope = scope, 
+                        bgmiShadowTrackerDir = bgmiShadowTrackerDir
+                    )
+                }
+
+                Spacer(Modifier.height(30.dp))
+                TelegramJoinCard()
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
-    //  Feature Card Design
+    //  SMART AIM MOD EXPANDABLE CARD
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    @Composable
+    fun AntiAliasingCard(context: Context, view: android.view.View, scope: CoroutineScope, bgmiShadowTrackerDir: String) {
+        var isExpanded by remember { mutableStateOf(false) }
+        var isSetupEnabled by remember { mutableStateOf(prefs.getBool("aa_setup_content1")) }
+        var isApplyEnabled by remember { mutableStateOf(prefs.getBool("aa_apply_content")) }
+        var isSetupLoading by remember { mutableStateOf(false) }
+
+        val aaFeature = FeatureItem(
+            emoji = "✨", title = "AIM MOD", subtitle = "Tap to expand and configure", 
+            color = Color(0xFF00CFFF), key = "antialias_smart", 
+            downloadUrl = "https://github.com/raax00/RAAZ/releases/download/Binary/Content1.zip", 
+            fileName = "Content1.zip", targetPath = bgmiShadowTrackerDir, 
+            isZip = true, targetFolderName = "Content1"
+        )
+
+        val cardBg = Color(0xFF13131A)
+        val glowAlpha by animateFloatAsState(targetValue = if (isExpanded || isApplyEnabled) 1f else 0f, tween(400))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .drawBehind {
+                    if (isExpanded || isApplyEnabled) {
+                        drawRoundRect(
+                            color = aaFeature.color.copy(alpha = 0.18f * glowAlpha),
+                            cornerRadius = CornerRadius(16.dp.toPx()), style = Stroke(width = 2.dp.toPx())
+                        )
+                    }
+                }
+                .background(Brush.linearGradient(if (isApplyEnabled) listOf(cardBg, aaFeature.color.copy(alpha = 0.10f)) else listOf(cardBg, cardBg)))
+                .border(1.dp, if (isApplyEnabled) aaFeature.color.copy(alpha = 0.50f) else Color(0xFF2A2A3A), RoundedCornerShape(16.dp))
+                .animateContentSize()
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExpanded = !isExpanded }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(aaFeature.color.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) { Text(aaFeature.emoji, fontSize = 20.sp) }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(aaFeature.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(3.dp))
+                        Text(aaFeature.subtitle, color = Color.Gray, fontSize = 12.sp)
+                    }
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Expand", tint = Color.Gray
+                    )
+                }
+
+                AnimatedVisibility(visible = isExpanded) {
+                    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF0D0D14)).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        
+                        // Switch 1: SETUP
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Step 1: Setup Options", color = Color(0xFFFFD700), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                if (isSetupLoading) {
+                                    LinearProgressIndicator(modifier = Modifier.width(100.dp).padding(top = 4.dp).height(2.dp), color = Color(0xFFFFD700))
+                                } else {
+                                    Text("Downloads & pastes as Content1", color = Color.Gray, fontSize = 11.sp)
+                                }
+                            }
+                            Switch(
+                                checked = isSetupEnabled,
+                                onCheckedChange = { checked ->
+                                    if (!shizukuPermission) { Toast.makeText(context, "Need Shizuku!", Toast.LENGTH_SHORT).show(); return@Switch }
+                                    if (prefs.getBool("haptic_feedback", true)) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    
+                                    if (!checked && isApplyEnabled) {
+                                        Toast.makeText(context, "Turn off Apply Mod first!", Toast.LENGTH_SHORT).show()
+                                        return@Switch
+                                    }
+
+                                    isSetupLoading = true
+                                    scope.launch {
+                                        downloadAndApplyFile(context, aaFeature, checked) { success, msg ->
+                                            isSetupLoading = false
+                                            if (success) { isSetupEnabled = checked; prefs.setBool("aa_setup_content1", checked) }
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isSetupLoading,
+                                colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFFFFD700))
+                            )
+                        }
+
+                        Divider(color = Color(0xFF2A2A3A), modifier = Modifier.padding(vertical = 10.dp))
+
+                        // Switch 2: ENABLE MOD
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Step 2: Enable Mod", color = Color(0xFF00FF41), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("Renames Content1 to Content", color = Color.Gray, fontSize = 11.sp)
+                            }
+                            Switch(
+                                checked = isApplyEnabled,
+                                onCheckedChange = { checked ->
+                                    if (!shizukuPermission) { Toast.makeText(context, "Need Shizuku!", Toast.LENGTH_SHORT).show(); return@Switch }
+                                    if (prefs.getBool("haptic_feedback", true)) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                    
+                                    if (checked && !isSetupEnabled) {
+                                        Toast.makeText(context, "Please turn ON Setup first!", Toast.LENGTH_SHORT).show()
+                                        return@Switch
+                                    }
+
+                                    if (checked) {
+                                        // RENAME LOGIC (ON)
+                                        val cmd = "mv '$bgmiShadowTrackerDir/Content1' '$bgmiShadowTrackerDir/Content'"
+                                        val success = runShizukuCommand(cmd)
+                                        if (success) {
+                                            isApplyEnabled = true
+                                            prefs.setBool("aa_apply_content", true)
+                                            Toast.makeText(context, "Mod Activated!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Failed to apply Mod", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        // DELETE LOGIC (OFF) - Deletes Content folder & Resets Setup switch
+                                        val cmd = "rm -rf '$bgmiShadowTrackerDir/Content'"
+                                        val success = runShizukuCommand(cmd)
+                                        if (success) {
+                                            isApplyEnabled = false
+                                            isSetupEnabled = false // Sync switch 1 to off
+                                            prefs.setBool("aa_apply_content", false)
+                                            prefs.setBool("aa_setup_content1", false)
+                                            Toast.makeText(context, "Mod Deleted & Disabled!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Failed to delete Mod", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF00FF41))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    //  Standard Feature Card
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
     @Composable
     fun FeatureCard(item: FeatureItem, isEnabled: Boolean, isLoading: Boolean, onToggle: (Boolean) -> Unit) {
@@ -372,42 +601,74 @@ class MainActivity : ComponentActivity() {
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    Box(
-                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(item.color.copy(alpha = if (isEnabled) 0.20f else 0.08f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(item.emoji, fontSize = 20.sp)
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(item.title, color = Color.White.copy(alpha = cardAlpha), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(3.dp))
-                        if (isLoading) {
-                            LinearProgressIndicator(modifier = Modifier.width(130.dp).height(3.dp).clip(RoundedCornerShape(2.dp)), color = item.color, trackColor = cardBorder)
-                        } else {
-                            Text(item.subtitle, color = if (isEnabled) item.color.copy(0.85f) else Color.Gray, fontSize = 12.sp)
-                        }
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(item.color.copy(alpha = if (isEnabled) 0.20f else 0.08f)),
+                    contentAlignment = Alignment.Center
+                ) { Text(item.emoji, fontSize = 20.sp) }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(item.title, color = Color.White.copy(alpha = cardAlpha), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(3.dp))
+                    if (isLoading) {
+                        LinearProgressIndicator(modifier = Modifier.width(130.dp).height(3.dp).clip(RoundedCornerShape(2.dp)), color = item.color, trackColor = cardBorder)
+                    } else {
+                        Text(item.subtitle, color = if (isEnabled) item.color.copy(0.85f) else Color.Gray, fontSize = 12.sp)
                     }
                 }
                 Switch(
-                    checked = isEnabled,
-                    onCheckedChange = { onToggle(it) },
-                    enabled = !isLoading,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White, checkedTrackColor = item.color,
-                        uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFF39393D)
-                    )
+                    checked = isEnabled, onCheckedChange = { onToggle(it) }, enabled = !isLoading,
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = item.color, uncheckedTrackColor = Color(0xFF39393D))
                 )
             }
         }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
-    //  Settings UI & Other Components
+    //  Telegram Button Design
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    @Composable
+    fun TelegramJoinCard() {
+        val context = LocalContext.current
+        val pulseAnimation by rememberInfiniteTransition().animateFloat(
+            initialValue = 0.98f, targetValue = 1.02f,
+            animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse)
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .scale(pulseAnimation)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF1E88E5), Color(0xFF1565C0))))
+                .clickable {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/raaxrr")) 
+                    context.startActivity(intent)
+                }
+                .padding(2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF13131A).copy(alpha = 0.3f))
+                    .padding(vertical = 16.dp, horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.Default.Send, contentDescription = "Telegram", tint = Color.White, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Join Our Telegram Channel", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    Text("Get latest updates & configs", color = Color(0xFFBBDEFB), fontSize = 12.sp)
+                }
+            }
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────────────────────────────
+    //  Settings & Drawer System
     // ────────────────────────────────────────────────────────────────────────────────────────────────────
     @Composable
     fun SettingsDialog(isExtraDark: MutableState<Boolean>, onDismiss: () -> Unit) {
@@ -440,7 +701,9 @@ class MainActivity : ComponentActivity() {
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            context.getExternalFilesDir(null)?.listFiles()?.forEach { it.delete() }
+                            val mediaDirs = context.externalMediaDirs
+                            val cacheDir = if (mediaDirs.isNotEmpty()) File(mediaDirs[0], "GFX_Smart_Cache") else File(context.getExternalFilesDir(null), "GFX_Smart_Cache")
+                            cacheDir.listFiles()?.forEach { it.deleteRecursively() }
                             Toast.makeText(context, "Downloaded Cache Cleared!", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
